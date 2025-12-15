@@ -1,6 +1,8 @@
+/** @type {import('postcss-load-config').Config} */
 const config = {
   plugins: {
-    "@tailwindcss/postcss": {},
+    // Esta é a linha que corrige o erro que você está vendo:
+    '@tailwindcss/postcss': {}, 
   },
 };
 
