@@ -551,9 +551,10 @@ export default function Home() {
       }
       const sw = await navigator.serviceWorker.register('/sw.js');
       await navigator.serviceWorker.ready;
+      const VAPID_PUBLIC_KEY = 'BJNT1Uj4MYsfk9nJQN7z9bfNJ1oWbFDf99-bkC2xsTXKVr2y5hlvJzbEvMEjt0BJbMu2vVa_V1qebo_DdcYEY9w';
       const subscription = await sw.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
       const { error } = await supabase.from('push_subscriptions').upsert({
         user_id: session.user.id,
