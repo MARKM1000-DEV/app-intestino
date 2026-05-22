@@ -564,7 +564,7 @@ export default function Home() {
       setNotifEnabled(true);
       showToast('Lembretes ativados! Você será notificado às 20h.', 'success');
     } catch (err) {
-      showToast(`Erro ao ativar: ${err.message}`, 'info');
+      showToast('Não foi possível ativar as notificações. Tente novamente.', 'info');
     }
   };
 
@@ -580,7 +580,7 @@ export default function Home() {
   };
 
   const fetchLogs = async () => {
-    const { data } = await supabase.from('logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+    const { data } = await supabase.from('logs').select('id, user_id, type, bristol, effort, date_display, created_at').eq('user_id', session.user.id).order('created_at', { ascending: false });
     if (data) { 
       setHistory(data); 
       setStreak(getCurrentStreak(data));
@@ -597,7 +597,7 @@ export default function Home() {
   };
 
   const fetchProfile = async () => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+    const { data } = await supabase.from('profiles').select('id, age, weight, water_goal').eq('id', session.user.id).single();
     if (data) { setUserProfile({ age: data.age, weight: data.weight, waterGoal: data.water_goal }); }
   };
 
