@@ -59,10 +59,174 @@ const BRISTOL_TYPES = [
   { id: 7, type: 7, label: "Tipo 7", desc: "Líquido total", color: "bg-red-100 text-red-800" },
 ];
 
+// ============================================================================
+// HELPERS DE DATA / STREAK
+// ============================================================================
+const toDateKey = (dateStr) => {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+
+const getUniqueDayKeys = (logs) =>
+  [...new Set(logs.map(l => toDateKey(l.created_at)))].sort();
+
+const getMaxStreak = (logs) => {
+  const days = getUniqueDayKeys(logs);
+  if (!days.length) return 0;
+  let max = 1, cur = 1;
+  for (let i = 1; i < days.length; i++) {
+    const diff = Math.round((new Date(days[i]) - new Date(days[i-1])) / 86400000);
+    if (diff === 1) { cur++; if (cur > max) max = cur; } else cur = 1;
+  }
+  return max;
+};
+
+const getCurrentStreak = (logs) => {
+  const daySet = new Set(logs.map(l => toDateKey(l.created_at)));
+  let streak = 0;
+  const today = new Date();
+  for (let i = 0; i <= 365; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    if (daySet.has(toDateKey(d))) streak++;
+    else break;
+  }
+  return streak;
+};
+
+// ============================================================================
+// CONQUISTAS
+// ============================================================================
 const BADGES = [
-  { id: 1, title: "Iniciante", icon: "🌱", desc: "Primeiro registro", condition: (logs) => logs.length >= 1 },
-  { id: 2, title: "Consistente", icon: "🔥", desc: "3 registros seguidos", condition: (logs) => logs.length >= 3 },
-  { id: 3, title: "Hidratado", icon: "💧", desc: "Meta de água batida", condition: () => false },
+  {
+    id: 1, title: "Primeiro Passo", icon: "🌱", desc: "Fazer o primeiro registro",
+    condition: (logs) => logs.length >= 1,
+    progress: (logs) => ({ current: Math.min(logs.length, 1), total: 1 }),
+  },
+  {
+    id: 2, title: "Semana Completa", icon: "📅", desc: "Registrar em 7 dias diferentes",
+    condition: (logs) => getUniqueDayKeys(logs).length >= 7,
+    progress: (logs) => ({ current: Math.min(getUniqueDayKeys(logs).length, 7), total: 7 }),
+  },
+  {
+    id: 3, title: "Consistente", icon: "🔄", desc: "7 dias seguidos com registro",
+    condition: (logs) => getMaxStreak(logs) >= 7,
+    progress: (logs) => ({ current: Math.min(getMaxStreak(logs), 7), total: 7 }),
+  },
+  {
+    id: 4, title: "Comprometido", icon: "💪", desc: "14 dias seguidos com registro",
+    condition: (logs) => getMaxStreak(logs) >= 14,
+    progress: (logs) => ({ current: Math.min(getMaxStreak(logs), 14), total: 14 }),
+  },
+  {
+    id: 5, title: "Dedicado", icon: "🏆", desc: "30 dias seguidos com registro",
+    condition: (logs) => getMaxStreak(logs) >= 30,
+    progress: (logs) => ({ current: Math.min(getMaxStreak(logs), 30), total: 30 }),
+  },
+  {
+    id: 6, title: "Intestino Feliz", icon: "😊", desc: "5 registros seguidos tipo 3 ou 4",
+    condition: (logs) => {
+      const pl = logs.filter(l => l.type === 'log').slice().reverse();
+      let c = 0;
+      for (const l of pl) { if (l.bristol >= 3 && l.bristol <= 4) { if (++c >= 5) return true; } else c = 0; }
+      return false;
+    },
+    progress: (logs) => {
+      const pl = logs.filter(l => l.type === 'log').slice().reverse();
+      let c = 0, max = 0;
+      for (const l of pl) { if (l.bristol >= 3 && l.bristol <= 4) { max = Math.max(max, ++c); } else c = 0; }
+      return { current: Math.min(max, 5), total: 5 };
+    },
+  },
+  {
+    id: 7, title: "Sem Esforço", icon: "🎯", desc: "5 registros seguidos sem esforço",
+    condition: (logs) => {
+      const pl = logs.filter(l => l.type === 'log').slice().reverse();
+      let c = 0;
+      for (const l of pl) { if (l.effort === 'none') { if (++c >= 5) return true; } else c = 0; }
+      return false;
+    },
+    progress: (logs) => {
+      const pl = logs.filter(l => l.type === 'log').slice().reverse();
+      let c = 0, max = 0;
+      for (const l of pl) { if (l.effort === 'none') { max = Math.max(max, ++c); } else c = 0; }
+      return { current: Math.min(max, 5), total: 5 };
+    },
+  },
+  {
+    id: 8, title: "Explorador", icon: "🔍", desc: "Registrar todos os 7 tipos Bristol",
+    condition: (logs) => {
+      const types = new Set(logs.filter(l => l.type === 'log').map(l => l.bristol));
+      return [1,2,3,4,5,6,7].every(t => types.has(t));
+    },
+    progress: (logs) => {
+      const types = new Set(logs.filter(l => l.type === 'log').map(l => l.bristol));
+      return { current: [1,2,3,4,5,6,7].filter(t => types.has(t)).length, total: 7 };
+    },
+  },
+  {
+    id: 9, title: "Veterano", icon: "⭐", desc: "30 dias usando o app",
+    condition: (logs) => {
+      if (!logs.length) return false;
+      return (new Date() - new Date(logs[logs.length-1].created_at)) / 86400000 >= 30;
+    },
+    progress: (logs) => {
+      if (!logs.length) return { current: 0, total: 30 };
+      const days = Math.floor((new Date() - new Date(logs[logs.length-1].created_at)) / 86400000);
+      return { current: Math.min(days, 30), total: 30 };
+    },
+  },
+  {
+    id: 10, title: "Mês Perfeito", icon: "📆", desc: "Registrar todos os dias de um mês",
+    condition: (logs) => {
+      const months = {};
+      logs.forEach(l => {
+        const d = new Date(l.created_at);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!months[key]) months[key] = { days: new Set(), total: new Date(d.getFullYear(), d.getMonth()+1, 0).getDate() };
+        months[key].days.add(d.getDate());
+      });
+      return Object.values(months).some(m => m.days.size >= m.total);
+    },
+    progress: (logs) => {
+      const months = {};
+      logs.forEach(l => {
+        const d = new Date(l.created_at);
+        const key = `${d.getFullYear()}-${d.getMonth()}`;
+        if (!months[key]) months[key] = { days: new Set(), total: new Date(d.getFullYear(), d.getMonth()+1, 0).getDate() };
+        months[key].days.add(d.getDate());
+      });
+      return Object.values(months).reduce((b, m) => m.days.size > b.current ? { current: m.days.size, total: m.total } : b, { current: 0, total: 30 });
+    },
+  },
+  {
+    id: 11, title: "Madrugador", icon: "🌅", desc: "3 registros antes das 8h da manhã",
+    condition: (logs) => logs.filter(l => new Date(l.created_at).getHours() < 8).length >= 3,
+    progress: (logs) => ({ current: Math.min(logs.filter(l => new Date(l.created_at).getHours() < 8).length, 3), total: 3 }),
+  },
+  {
+    id: 12, title: "Noturno", icon: "🌙", desc: "3 registros após as 22h",
+    condition: (logs) => logs.filter(l => new Date(l.created_at).getHours() >= 22).length >= 3,
+    progress: (logs) => ({ current: Math.min(logs.filter(l => new Date(l.created_at).getHours() >= 22).length, 3), total: 3 }),
+  },
+  {
+    id: 13, title: "Pontual", icon: "⏰", desc: "5 registros no mesmo horário",
+    condition: (logs) => {
+      const c = {};
+      logs.forEach(l => { const h = new Date(l.created_at).getHours(); c[h] = (c[h]||0)+1; });
+      return Math.max(0, ...Object.values(c)) >= 5;
+    },
+    progress: (logs) => {
+      const c = {};
+      logs.forEach(l => { const h = new Date(l.created_at).getHours(); c[h] = (c[h]||0)+1; });
+      return { current: Math.min(Math.max(0, ...Object.values(c)), 5), total: 5 };
+    },
+  },
+  {
+    id: 14, title: "Hidratado", icon: "💧", desc: "Meta de água atingida por 7 dias",
+    condition: () => false,
+    progress: () => ({ current: 0, total: 7 }),
+  },
 ];
 
 // ============================================================================
@@ -308,7 +472,7 @@ export default function Home() {
     const { data } = await supabase.from('logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
     if (data) { 
       setHistory(data); 
-      setStreak(data.length); 
+      setStreak(getCurrentStreak(data));
       calculateConstipation(data); 
     }
   };
@@ -395,7 +559,40 @@ export default function Home() {
               )}
             </div>
           )}
-          {view === 'awards' && (<div className="space-y-6 animate-in fade-in"><div className="px-2"><h1 className="text-3xl font-bold text-gray-900">Conquistas</h1></div><div className="grid grid-cols-2 gap-4">{BADGES.map((badge) => { const unlocked = badge.condition(history); return (<Card key={badge.id} className={`flex flex-col items-center text-center gap-3 ${!unlocked ? 'opacity-50 grayscale bg-gray-50' : ''}`}><div className="text-5xl">{badge.icon}</div><h3 className="font-bold text-sm">{badge.title}</h3>{unlocked && <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">DESBLOQUEADO</span>}</Card>)})}</div></div>)}
+          {view === 'awards' && (
+            <div className="space-y-6 animate-in fade-in pb-4">
+              <div className="px-2">
+                <h1 className="text-3xl font-bold text-gray-900">Conquistas</h1>
+                <p className="text-gray-500 text-sm mt-1">
+                  {BADGES.filter(b => b.condition(history)).length} de {BADGES.length} desbloqueadas
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {BADGES.map((badge) => {
+                  const unlocked = badge.condition(history);
+                  const prog = badge.progress(history);
+                  const pct = prog.total > 0 ? Math.round((prog.current / prog.total) * 100) : 0;
+                  return (
+                    <Card key={badge.id} className={`flex flex-col items-center text-center gap-2 p-4 transition-all ${unlocked ? 'border-yellow-200 bg-gradient-to-b from-yellow-50 to-white shadow-md' : 'bg-gray-50 opacity-70'}`}>
+                      <div className={`text-4xl ${!unlocked ? 'grayscale' : ''}`}>{badge.icon}</div>
+                      <h3 className="font-bold text-sm leading-tight">{badge.title}</h3>
+                      <p className="text-[10px] text-gray-500 leading-tight">{badge.desc}</p>
+                      {unlocked ? (
+                        <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full mt-1">DESBLOQUEADO</span>
+                      ) : (
+                        <div className="w-full mt-1">
+                          <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-400 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-1">{prog.current}/{prog.total}</p>
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </main>
         <nav className="border-t bg-white/95 backdrop-blur pb-8 pt-2 px-6 flex justify-between z-40 absolute bottom-0 w-full shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 transition-all ${view === 'home' ? 'text-blue-600' : 'text-gray-400'}`}><Calendar className="w-6 h-6" /><span className="text-[10px] font-medium">Hoje</span></button>
