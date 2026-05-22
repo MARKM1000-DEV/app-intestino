@@ -251,8 +251,8 @@ const ProfileModal = ({ currentProfile, onSave, onCancel, isSaving }) => {
       </div>
       <div className="p-6 space-y-6 bg-gray-50 flex-1">
         <Card className="space-y-4">
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">Idade</label><input type="number" value={age} onChange={(e) => setAge(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200" placeholder="Ex: 30"/></div>
-          <div><label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200" placeholder="Ex: 70"/></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">Idade</label><input type="number" value={age} onChange={(e) => setAge(e.target.value)} min="1" max="120" className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200" placeholder="Ex: 30"/></div>
+          <div><label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} min="1" max="500" className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200" placeholder="Ex: 70"/></div>
         </Card>
         {calculatedGoal && (
           <Card className="bg-blue-50 border-blue-100 flex flex-col items-center text-center p-6 animate-in fade-in">
@@ -305,7 +305,7 @@ export default function Home() {
   const fetchData = async () => { await Promise.all([fetchLogs(), fetchProfile()]); };
 
   const fetchLogs = async () => {
-    const { data } = await supabase.from('logs').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
     if (data) { 
       setHistory(data); 
       setStreak(data.length); 
@@ -361,7 +361,7 @@ export default function Home() {
 
   const handleDeleteLog = async (id) => {
     if (confirm("Tem certeza que deseja apagar este registro?")) {
-      const { error } = await supabase.from('logs').delete().eq('id', id);
+      const { error } = await supabase.from('logs').delete().eq('id', id).eq('user_id', session.user.id);
       if (!error) { 
           await fetchLogs(); 
           showToast("Registro apagado.", "info");
