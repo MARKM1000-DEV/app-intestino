@@ -238,6 +238,41 @@ const BADGES = [
 ];
 
 // ============================================================================
+// MODAL DE TROCA DE SENHA
+// ============================================================================
+const PasswordChangeModal = ({ onClose }) => {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSave = async () => {
+    if (password.length < 6) { setError('A senha deve ter pelo menos 6 caracteres.'); return; }
+    if (password !== confirm) { setError('As senhas não coincidem.'); return; }
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) { setError(error.message); setLoading(false); return; }
+    onClose(true);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+      <div className="bg-white rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+        <h2 className="text-xl font-bold text-gray-900">Criar nova senha</h2>
+        <p className="text-sm text-gray-500">Escolha uma senha segura para sua conta.</p>
+        <div className="space-y-3">
+          <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Nova senha" className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500" />
+          <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Confirmar senha" className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:border-blue-500" />
+        </div>
+        {error && <p className="text-red-500 text-sm bg-red-50 p-2 rounded-lg">{error}</p>}
+        <Button onClick={handleSave} disabled={loading}>{loading ? 'Salvando...' : 'Salvar senha'}</Button>
+        <Button variant="secondary" onClick={() => onClose(false)}>Cancelar</Button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // LOGIN SCREEN
 // ============================================================================
 const LoginScreen = ({ onLoginSuccess }) => {
@@ -467,6 +502,7 @@ export default function Home() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [streak, setStreak] = useState(0);
   const [userProfile, setUserProfile] = useState({ age: '', weight: '', waterGoal: 2000 });
   const [history, setHistory] = useState([]);
@@ -486,7 +522,10 @@ export default function Home() {
       setSession(session);
       setLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (_event === 'PASSWORD_RECOVERY') setShowPasswordModal(true);
+      setSession(session);
+    });
     return () => subscription.unsubscribe();
   }, []);
 
@@ -500,23 +539,32 @@ export default function Home() {
   };
 
   const registerPush = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      showToast('Seu dispositivo não suporta notificações.', 'info');
-      return;
+    try {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        showToast('Seu dispositivo não suporta notificações.', 'info');
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        showToast('Permissão de notificação negada.', 'info');
+        return;
+      }
+      const sw = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const subscription = await sw.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+      });
+      const { error } = await supabase.from('push_subscriptions').upsert({
+        user_id: session.user.id,
+        subscription: subscription.toJSON(),
+      });
+      if (error) throw error;
+      setNotifEnabled(true);
+      showToast('Lembretes ativados! Você será notificado às 20h.', 'success');
+    } catch (err) {
+      showToast(`Erro ao ativar: ${err.message}`, 'info');
     }
-    const permission = await Notification.requestPermission();
-    if (permission !== 'granted') {
-      showToast('Permissão de notificação negada.', 'info');
-      return;
-    }
-    const sw = await navigator.serviceWorker.register('/sw.js');
-    const subscription = await sw.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
-    });
-    await supabase.from('push_subscriptions').upsert({ user_id: session.user.id, subscription: subscription.toJSON() });
-    setNotifEnabled(true);
-    showToast('Lembretes ativados! Você será notificado às 20h.', 'success');
   };
 
   const unregisterPush = async () => {
@@ -663,6 +711,7 @@ export default function Home() {
         </nav>
         {showLogModal && <LogFlow onComplete={handleSaveFullLog} onCancel={() => setShowLogModal(false)} isSaving={isSaving} />}
         {showProfileModal && <ProfileModal currentProfile={userProfile} onSave={handleSaveProfile} onCancel={() => setShowProfileModal(false)} isSaving={isSaving} notifEnabled={notifEnabled} onToggleNotif={notifEnabled ? unregisterPush : registerPush} />}
+        {showPasswordModal && <PasswordChangeModal onClose={(success) => { setShowPasswordModal(false); if (success) showToast('Senha alterada com sucesso!', 'success'); }} />}
       </div>
       <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
     </div>
