@@ -2,10 +2,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { 
-  Check, X, Calendar, BarChart2, Trophy, Settings, 
-  Droplets, Activity, Info, Trash2, LogIn, LogOut, AlertTriangle
+import {
+  Check, X, Calendar, BarChart2, Trophy, Settings,
+  Droplets, Activity, Info, Trash2, LogIn, LogOut, AlertTriangle, Bell, BellOff
 } from 'lucide-react';
+
+// Converte a chave VAPID pública (base64url) para Uint8Array
+const urlBase64ToUint8Array = (base64String) => {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+};
 
 // ============================================================================
 // COMPONENTE DE NOTIFICAÇÃO (TOAST) - NOVO!
@@ -387,7 +395,7 @@ const LogFlow = ({ onComplete, onCancel, isSaving }) => {
   );
 };
 
-const ProfileModal = ({ currentProfile, onSave, onCancel, isSaving }) => {
+const ProfileModal = ({ currentProfile, onSave, onCancel, isSaving, notifEnabled, onToggleNotif }) => {
   const [age, setAge] = useState(currentProfile.age || '');
   const [weight, setWeight] = useState(currentProfile.weight || '');
   const [calculatedGoal, setCalculatedGoal] = useState(null);
@@ -425,7 +433,24 @@ const ProfileModal = ({ currentProfile, onSave, onCancel, isSaving }) => {
             <p className="text-blue-400 text-sm">Diários</p>
           </Card>
         )}
-        <div className="pt-8 border-t"><button onClick={handleLogout} className="w-full py-4 text-red-500 font-medium flex items-center justify-center bg-red-50 rounded-xl hover:bg-red-100 transition-colors"><LogOut className="w-5 h-5 mr-2" /> Sair do App</button></div>
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {notifEnabled ? <Bell className="w-5 h-5 text-blue-600" /> : <BellOff className="w-5 h-5 text-gray-400" />}
+              <div>
+                <p className="font-semibold text-sm text-gray-900">Lembrete diário</p>
+                <p className="text-xs text-gray-500">Notificação às 20h se não registrou</p>
+              </div>
+            </div>
+            <button
+              onClick={onToggleNotif}
+              className={`relative w-12 h-6 rounded-full transition-colors ${notifEnabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${notifEnabled ? 'left-7' : 'left-1'}`} />
+            </button>
+          </div>
+        </Card>
+        <div className="pt-4 border-t"><button onClick={handleLogout} className="w-full py-4 text-red-500 font-medium flex items-center justify-center bg-red-50 rounded-xl hover:bg-red-100 transition-colors"><LogOut className="w-5 h-5 mr-2" /> Sair do App</button></div>
       </div>
     </div>
   );
@@ -441,6 +466,7 @@ export default function Home() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(false);
   const [streak, setStreak] = useState(0);
   const [userProfile, setUserProfile] = useState({ age: '', weight: '', waterGoal: 2000 });
   const [history, setHistory] = useState([]);
@@ -466,7 +492,43 @@ export default function Home() {
 
   useEffect(() => { if (session) { fetchData(); } }, [session]);
 
-  const fetchData = async () => { await Promise.all([fetchLogs(), fetchProfile()]); };
+  const fetchData = async () => { await Promise.all([fetchLogs(), fetchProfile(), checkNotifStatus()]); };
+
+  const checkNotifStatus = async () => {
+    const { data } = await supabase.from('push_subscriptions').select('id').eq('user_id', session.user.id).single();
+    setNotifEnabled(!!data);
+  };
+
+  const registerPush = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      showToast('Seu dispositivo não suporta notificações.', 'info');
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      showToast('Permissão de notificação negada.', 'info');
+      return;
+    }
+    const sw = await navigator.serviceWorker.register('/sw.js');
+    const subscription = await sw.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY),
+    });
+    await supabase.from('push_subscriptions').upsert({ user_id: session.user.id, subscription: subscription.toJSON() });
+    setNotifEnabled(true);
+    showToast('Lembretes ativados! Você será notificado às 20h.', 'success');
+  };
+
+  const unregisterPush = async () => {
+    const sw = await navigator.serviceWorker.getRegistration('/sw.js');
+    if (sw) {
+      const subscription = await sw.pushManager.getSubscription();
+      if (subscription) await subscription.unsubscribe();
+    }
+    await supabase.from('push_subscriptions').delete().eq('user_id', session.user.id);
+    setNotifEnabled(false);
+    showToast('Lembretes desativados.', 'info');
+  };
 
   const fetchLogs = async () => {
     const { data } = await supabase.from('logs').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
@@ -600,7 +662,7 @@ export default function Home() {
            <button onClick={() => setView('awards')} className={`flex flex-col items-center gap-1 w-16 transition-all ${view === 'awards' ? 'text-blue-600' : 'text-gray-400'}`}><Trophy className="w-6 h-6" /><span className="text-[10px] font-medium">Prêmios</span></button>
         </nav>
         {showLogModal && <LogFlow onComplete={handleSaveFullLog} onCancel={() => setShowLogModal(false)} isSaving={isSaving} />}
-        {showProfileModal && <ProfileModal currentProfile={userProfile} onSave={handleSaveProfile} onCancel={() => setShowProfileModal(false)} isSaving={isSaving} />}
+        {showProfileModal && <ProfileModal currentProfile={userProfile} onSave={handleSaveProfile} onCancel={() => setShowProfileModal(false)} isSaving={isSaving} notifEnabled={notifEnabled} onToggleNotif={notifEnabled ? unregisterPush : registerPush} />}
       </div>
       <style>{`.scrollbar-hide::-webkit-scrollbar { display: none; }`}</style>
     </div>
