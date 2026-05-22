@@ -537,12 +537,12 @@ export default function Home() {
   if (!session) return <LoginScreen onLoginSuccess={(s) => setSession(s)} />;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex justify-center text-gray-900 font-sans">
+    <div className="h-screen overflow-hidden bg-gray-50 flex justify-center text-gray-900 font-sans">
       {/* TOAST FLUTUANTE */}
       {notification && <NotificationToast message={notification.msg} type={notification.type} />}
 
-      <div className="w-full max-w-md bg-white min-h-screen shadow-2xl relative flex flex-col">
-        <main className="flex-1 overflow-y-auto pt-10 px-4 scrollbar-hide pb-28">
+      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col">
+        <main className="flex-1 overflow-y-auto pt-10 px-4 scrollbar-hide pb-4">
           {view === 'home' && <HomeView streak={streak} userProfile={userProfile} onLogClick={handleLogClick} onOpenProfile={() => setShowProfileModal(true)} daysWithout={daysWithout} />}
           {view === 'stats' && (
             <div className="space-y-4 animate-in fade-in">
@@ -594,7 +594,7 @@ export default function Home() {
             </div>
           )}
         </main>
-        <nav className="border-t bg-white/95 backdrop-blur pb-8 pt-2 px-6 flex justify-between z-40 absolute bottom-0 w-full shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
+        <nav className="border-t bg-white/95 backdrop-blur pb-8 pt-2 px-6 flex justify-between z-40 shrink-0 shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
            <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 w-16 transition-all ${view === 'home' ? 'text-blue-600' : 'text-gray-400'}`}><Calendar className="w-6 h-6" /><span className="text-[10px] font-medium">Hoje</span></button>
            <button onClick={() => setView('stats')} className={`flex flex-col items-center gap-1 w-16 transition-all ${view === 'stats' ? 'text-blue-600' : 'text-gray-400'}`}><BarChart2 className="w-6 h-6" /><span className="text-[10px] font-medium">Histórico</span></button>
            <button onClick={() => setView('awards')} className={`flex flex-col items-center gap-1 w-16 transition-all ${view === 'awards' ? 'text-blue-600' : 'text-gray-400'}`}><Trophy className="w-6 h-6" /><span className="text-[10px] font-medium">Prêmios</span></button>
